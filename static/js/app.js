@@ -143,22 +143,84 @@ function showToast(message, duration = 3000) {
 // Modal Management
 // ============================================
 
+// Track modal stack for proper z-index management
+const modalStack = [];
+
 function openModal(modalId) {
+    // Close any existing modals first to prevent overlap
+    closeAllModals();
+
+    const modal = $(`#${modalId}`);
+    if (!modal) return;
+
+    // Add to stack and set z-index
+    modalStack.push(modalId);
+    const zIndex = 201 + modalStack.length;
+    modal.style.zIndex = zIndex;
+
     $('#modalOverlay').classList.add('active');
-    $(`#${modalId}`).classList.add('active');
+    modal.classList.add('active');
     document.body.style.overflow = 'hidden';
+
+    // Focus the modal for accessibility
+    modal.setAttribute('tabindex', '-1');
+    modal.focus();
 }
 
 function closeModal(modalId) {
-    $('#modalOverlay').classList.remove('active');
-    $(`#${modalId}`).classList.remove('active');
-    document.body.style.overflow = '';
+    const modal = $(`#${modalId}`);
+    if (!modal) return;
+
+    modal.classList.remove('active');
+    modal.style.zIndex = '';
+
+    // Remove from stack
+    const index = modalStack.indexOf(modalId);
+    if (index > -1) {
+        modalStack.splice(index, 1);
+    }
+
+    // If no more modals, hide overlay and restore scroll
+    if (modalStack.length === 0) {
+        $('#modalOverlay').classList.remove('active');
+        document.body.style.overflow = '';
+    }
 }
 
 function closeAllModals() {
-    $$('.modal').forEach(modal => modal.classList.remove('active'));
+    $$('.modal').forEach(modal => {
+        modal.classList.remove('active');
+        modal.style.zIndex = '';
+    });
     $('#modalOverlay').classList.remove('active');
     document.body.style.overflow = '';
+    modalStack.length = 0; // Clear the stack
+}
+
+function closeTopModal() {
+    if (modalStack.length > 0) {
+        const topModalId = modalStack[modalStack.length - 1];
+        closeModal(topModalId);
+    }
+}
+
+// ESC key handler for modals
+function initModalKeyHandler() {
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modalStack.length > 0) {
+            e.preventDefault();
+            closeTopModal();
+        }
+    });
+}
+
+// Prevent clicks inside modal from closing it
+function initModalClickHandler() {
+    $$('.modal').forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    });
 }
 
 // ============================================
@@ -1687,6 +1749,8 @@ function initEventListeners() {
 document.addEventListener('DOMContentLoaded', () => {
     initDarkMode();
     initEventListeners();
+    initModalKeyHandler();
+    initModalClickHandler();
     initPullToRefresh();
     registerServiceWorker();
     loadDashboard();

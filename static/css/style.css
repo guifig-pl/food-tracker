@@ -1191,6 +1191,8 @@ input:checked + .slider::before {
     visibility: hidden;
     transition: all var(--transition-normal);
     z-index: 200;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .modal-overlay.active {
@@ -1207,15 +1209,21 @@ input:checked + .slider::before {
     background: var(--bg-secondary);
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     transform: translateY(100%);
-    transition: transform var(--transition-normal);
+    transition: transform var(--transition-normal), opacity var(--transition-normal), visibility var(--transition-normal);
     z-index: 201;
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    cursor: default;
+    outline: none;
+    opacity: 0;
+    visibility: hidden;
 }
 
 .modal.active {
     transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
 }
 
 .modal-header {
@@ -1235,6 +1243,8 @@ input:checked + .slider::before {
 .modal-close {
     width: 44px;
     height: 44px;
+    min-width: 44px;
+    min-height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1244,6 +1254,18 @@ input:checked + .slider::before {
     font-size: 1.5rem;
     color: var(--text-secondary);
     cursor: pointer;
+    transition: background-color var(--transition-fast), transform var(--transition-fast);
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+.modal-close:hover {
+    background: var(--bg-hover);
+}
+
+.modal-close:active {
+    transform: scale(0.95);
+    background: var(--border-color);
 }
 
 .modal-content {
@@ -1844,10 +1866,13 @@ input:checked + .slider::before {
         width: 90%;
         border-radius: var(--radius-lg);
         max-height: 80vh;
+        /* Ensure hidden state - opacity/visibility inherited from base */
     }
 
     .modal.active {
         transform: translate(-50%, 50%) scale(1);
+        opacity: 1;
+        visibility: visible;
     }
 
     .modal-content {
