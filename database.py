@@ -1,21 +1,92 @@
 """
-Database module for Food Tracker CLI.
-Handles SQLite database setup and CRUD operations.
+Database module for Food Tracker.
+Handles PostgreSQL database setup and CRUD operations.
 """
 
-import sqlite3
+import os
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from datetime import datetime, date
-from typing import Optional, List, Tuple
-from pathlib import Path
+from typing import Optional, List
+from urllib.parse import urlparse
 
-DATABASE_PATH = Path.home() / ".food_tracker" / "food_tracker.db"
+# Get database URL from environment variable
+DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://localhost/food_tracker')
+
+# Foods data for auto-import on first run
+FOODS_DATA = [
+    # Protein products
+    ("Müllermilch Protein Shake Schoko-Coco", 248, 26, 20.4, 6.8),
+    ("Rewe Chocolate Protein Ice Cream", 132, 9.4, 17.7, 2.7),
+    ("KADER Shake", 395, 59, 23, 8),
+    ("Rewe Protein Bar ESN Dark Cookie", 178, 13, 12, 4),
+    ("Vegan Shake", 138, 10, 10.6, 5.6),
+    ("Protein Bowl", 86, 4.6, 12, 1.5),
+    # Nuts and snacks
+    ("Roasted Chickpeas", 279, 10, 32, 13),
+    ("Peanuts Spicy", 590, 25, 16, 46),
+    ("Salted Peanuts", 619, 24, 11, 51),
+    ("Almonds", 576, 21, 22, 49),
+    ("Cashews", 589, 20, 24, 45),
+    ("BBQ Mix Nuts", 602, 26, 12, 48),
+    ("Wasabi Peanuts", 402, 13, 62, 10),
+    ("Kichererbsen Nuts Curry", 97, 4.3, 13, 3.2),
+    # Fruits
+    ("Banana", 108, 1.4, 28.8, 0.6),
+    ("Strawberry", 32, 0.7, 7.7, 0.3),
+    # Dairy
+    ("Milk", 64, 3.3, 4.8, 3.5),
+    ("Cheese", 300, 20, 0, 24),
+    ("Frischkäse", 65, 13, 1, 0.8),
+    # Beverages
+    ("Coke (300ml)", 138.6, 0, 33, 0),
+    # Sweets
+    ("Goiabada", 324, 0, 81, 0),
+    # Meats
+    ("Chicken", 164, 31, 0, 3.5),
+    ("Spiced Chicken", 209, 18, 0.5, 15),
+    ("Chicken 2", 100, 21, 0.7, 1.5),
+    ("Chicken w Bones", 129, 18, 3.3, 5.2),
+    ("Chicken Heart", 185, 26, 0.1, 8),
+    ("Donner Chicken", 204, 17.5, 5, 12),
+    ("Spare Ribs", 243, 21, 5.8, 15),
+    ("Spiced Pork", 181, 20, 0.5, 11),
+    ("Black Angus Meat", 250, 25, 0, 15),
+    ("Sausage", 350, 12, 1, 25),
+    ("Bacon", 600, 35, 0, 40),
+    ("Minced Meat", 280, 20, 0, 20),
+    ("Strogonoff", 145, 12, 4, 9),
+    # Fish
+    ("Tuna Fish", 115, 26.6, 0, 0.9),
+    # Eggs
+    ("Egg", 60, 5, 0.4, 4),
+    # Vegetables and sides
+    ("Veggies", 47, 1.7, 4.4, 0.3),
+    ("Butter Veggies", 92, 2.5, 6.8, 5.2),
+    ("Chili Beans", 70, 3.9, 8.2, 0.8),
+    ("Kichererbsen", 106, 7.5, 14, 0),
+    # Carbs
+    ("Baked Potato", 93, 2.5, 21, 0.1),
+    ("Basmati Vollkorn", 140, 3.2, 28.8, 1),
+    ("Mexican Rice", 92, 5.6, 13.6, 1.3),
+    ("French Fries", 280, 3, 35, 12),
+    ("Frozen Fries", 170, 2.5, 25, 6),
+    ("Croquette", 170, 2.5, 25, 6),
+    # Sauces and condiments
+    ("Pesto Verde", 522, 4.5, 6.7, 44),
+    # Fast food
+    ("Five Guys", 610, 18, 39, 32),
+]
 
 
-def get_connection() -> sqlite3.Connection:
-    """Get a database connection, creating the database directory if needed."""
-    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
+def get_connection():
+    """Get a database connection using DATABASE_URL."""
+    # Handle Render's postgres:// URL (needs to be postgresql://)
+    url = DATABASE_URL
+    if url.startswith('postgres://'):
+        url = url.replace('postgres://', 'postgresql://', 1)
+
+    conn = psycopg2.connect(url, cursor_factory=RealDictCursor)
     return conn
 
 
@@ -27,7 +98,7 @@ def init_database():
     # Foods table - stores all food items with nutritional info
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS foods (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             name TEXT NOT NULL UNIQUE,
             calories REAL NOT NULL,
             protein REAL NOT NULL DEFAULT 0,
@@ -42,7 +113,7 @@ def init_database():
     # Meal logs table - records of meals eaten
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS meal_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             food_id INTEGER NOT NULL,
             portions REAL NOT NULL DEFAULT 1.0,
             meal_type TEXT NOT NULL,
@@ -63,7 +134,7 @@ def init_database():
     # Off days table - tracks days not counted
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS off_days (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             date DATE NOT NULL UNIQUE,
             reason TEXT NOT NULL,
             notes TEXT,
@@ -74,18 +145,17 @@ def init_database():
     # Weight history table - tracks weight over time
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS weight_history (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             weight REAL NOT NULL,
-            recorded_at DATE NOT NULL,
-            notes TEXT,
-            UNIQUE(recorded_at)
+            recorded_at DATE NOT NULL UNIQUE,
+            notes TEXT
         )
     """)
 
     # Meals table - groups multiple ingredients into a single meal
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS meals (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             name TEXT,
             meal_type TEXT NOT NULL,
             logged_at TIMESTAMP NOT NULL,
@@ -101,7 +171,7 @@ def init_database():
     # Meal ingredients table - links foods to meals with amounts
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS meal_ingredients (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             meal_id INTEGER NOT NULL,
             food_id INTEGER NOT NULL,
             amount_grams REAL NOT NULL DEFAULT 100,
@@ -114,6 +184,8 @@ def init_database():
         )
     """)
 
+    conn.commit()
+
     # Insert default settings if not exists
     default_settings = [
         ('goal_type', 'maintenance'),
@@ -125,10 +197,26 @@ def init_database():
 
     for key, value in default_settings:
         cursor.execute("""
-            INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)
+            INSERT INTO settings (key, value) VALUES (%s, %s)
+            ON CONFLICT (key) DO NOTHING
         """, (key, value))
 
     conn.commit()
+
+    # Auto-import foods if the table is empty
+    cursor.execute("SELECT COUNT(*) as count FROM foods")
+    result = cursor.fetchone()
+    if result['count'] == 0:
+        print("Importing default foods...")
+        for name, calories, protein, carbs, fats in FOODS_DATA:
+            cursor.execute("""
+                INSERT INTO foods (name, calories, protein, carbs, fats, serving_size)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (name) DO NOTHING
+            """, (name, calories, protein, carbs, fats, '100g'))
+        conn.commit()
+        print(f"Imported {len(FOODS_DATA)} foods.")
+
     conn.close()
 
 
@@ -141,9 +229,10 @@ def add_food(name: str, calories: float, protein: float = 0,
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO foods (name, calories, protein, carbs, fats, serving_size)
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        RETURNING id
     """, (name, calories, protein, carbs, fats, serving_size))
-    food_id = cursor.lastrowid
+    food_id = cursor.fetchone()['id']
     conn.commit()
     conn.close()
     return food_id
@@ -160,29 +249,30 @@ def update_food(food_id: int, name: str = None, calories: float = None,
     values = []
 
     if name is not None:
-        updates.append("name = ?")
+        updates.append("name = %s")
         values.append(name)
     if calories is not None:
-        updates.append("calories = ?")
+        updates.append("calories = %s")
         values.append(calories)
     if protein is not None:
-        updates.append("protein = ?")
+        updates.append("protein = %s")
         values.append(protein)
     if carbs is not None:
-        updates.append("carbs = ?")
+        updates.append("carbs = %s")
         values.append(carbs)
     if fats is not None:
-        updates.append("fats = ?")
+        updates.append("fats = %s")
         values.append(fats)
     if serving_size is not None:
-        updates.append("serving_size = ?")
+        updates.append("serving_size = %s")
         values.append(serving_size)
 
     if not updates:
+        conn.close()
         return False
 
     values.append(food_id)
-    query = f"UPDATE foods SET {', '.join(updates)} WHERE id = ?"
+    query = f"UPDATE foods SET {', '.join(updates)} WHERE id = %s"
     cursor.execute(query, values)
     success = cursor.rowcount > 0
     conn.commit()
@@ -194,7 +284,7 @@ def delete_food(food_id: int) -> bool:
     """Delete a food from the database. Returns True if successful."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM foods WHERE id = ?", (food_id,))
+    cursor.execute("DELETE FROM foods WHERE id = %s", (food_id,))
     success = cursor.rowcount > 0
     conn.commit()
     conn.close()
@@ -205,7 +295,7 @@ def get_food(food_id: int) -> Optional[dict]:
     """Get a single food by ID."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM foods WHERE id = ?", (food_id,))
+    cursor.execute("SELECT * FROM foods WHERE id = %s", (food_id,))
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
@@ -217,9 +307,9 @@ def search_foods(query: str, limit: int = 20) -> List[dict]:
     cursor = conn.cursor()
     cursor.execute("""
         SELECT * FROM foods
-        WHERE name LIKE ?
+        WHERE name ILIKE %s
         ORDER BY is_favorite DESC, name ASC
-        LIMIT ?
+        LIMIT %s
     """, (f"%{query}%", limit))
     results = [dict(row) for row in cursor.fetchall()]
     conn.close()
@@ -233,7 +323,7 @@ def get_all_foods(limit: int = 100) -> List[dict]:
     cursor.execute("""
         SELECT * FROM foods
         ORDER BY is_favorite DESC, name ASC
-        LIMIT ?
+        LIMIT %s
     """, (limit,))
     results = [dict(row) for row in cursor.fetchall()]
     conn.close()
@@ -259,11 +349,12 @@ def toggle_favorite(food_id: int) -> bool:
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        UPDATE foods SET is_favorite = NOT is_favorite WHERE id = ?
+        UPDATE foods SET is_favorite = CASE WHEN is_favorite = 1 THEN 0 ELSE 1 END
+        WHERE id = %s
     """, (food_id,))
     conn.commit()
 
-    cursor.execute("SELECT is_favorite FROM foods WHERE id = ?", (food_id,))
+    cursor.execute("SELECT is_favorite FROM foods WHERE id = %s", (food_id,))
     row = cursor.fetchone()
     conn.close()
     return bool(row['is_favorite']) if row else False
@@ -281,9 +372,10 @@ def log_meal(food_id: int, portions: float, meal_type: str,
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO meal_logs (food_id, portions, meal_type, logged_at, notes)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s)
+        RETURNING id
     """, (food_id, portions, meal_type, logged_at, notes))
-    log_id = cursor.lastrowid
+    log_id = cursor.fetchone()['id']
     conn.commit()
     conn.close()
     return log_id
@@ -293,7 +385,7 @@ def delete_meal_log(log_id: int) -> bool:
     """Delete a meal log. Returns True if successful."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM meal_logs WHERE id = ?", (log_id,))
+    cursor.execute("DELETE FROM meal_logs WHERE id = %s", (log_id,))
     success = cursor.rowcount > 0
     conn.commit()
     conn.close()
@@ -321,9 +413,9 @@ def get_meals_for_date(target_date: date) -> List[dict]:
             f.is_favorite
         FROM meal_logs ml
         JOIN foods f ON ml.food_id = f.id
-        WHERE DATE(ml.logged_at) = ?
+        WHERE DATE(ml.logged_at) = %s
         ORDER BY ml.logged_at ASC
-    """, (target_date.isoformat(),))
+    """, (target_date,))
     results = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return results
@@ -349,9 +441,9 @@ def get_meals_for_date_range(start_date: date, end_date: date) -> List[dict]:
             f.serving_size
         FROM meal_logs ml
         JOIN foods f ON ml.food_id = f.id
-        WHERE DATE(ml.logged_at) BETWEEN ? AND ?
+        WHERE DATE(ml.logged_at) BETWEEN %s AND %s
         ORDER BY ml.logged_at ASC
-    """, (start_date.isoformat(), end_date.isoformat()))
+    """, (start_date, end_date))
     results = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return results
@@ -362,11 +454,11 @@ def get_recent_foods(limit: int = 10) -> List[dict]:
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT DISTINCT f.*
+        SELECT DISTINCT ON (f.id) f.*
         FROM foods f
         JOIN meal_logs ml ON f.id = ml.food_id
-        ORDER BY ml.logged_at DESC
-        LIMIT ?
+        ORDER BY f.id, ml.logged_at DESC
+        LIMIT %s
     """, (limit,))
     results = [dict(row) for row in cursor.fetchall()]
     conn.close()
@@ -379,7 +471,7 @@ def get_setting(key: str, default: str = None) -> Optional[str]:
     """Get a setting value."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+    cursor.execute("SELECT value FROM settings WHERE key = %s", (key,))
     row = cursor.fetchone()
     conn.close()
     return row['value'] if row else default
@@ -390,7 +482,8 @@ def set_setting(key: str, value: str):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)
+        INSERT INTO settings (key, value) VALUES (%s, %s)
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
     """, (key, value))
     conn.commit()
     conn.close()
@@ -424,10 +517,12 @@ def add_off_day(target_date: date, reason: str, notes: str = None) -> int:
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT OR REPLACE INTO off_days (date, reason, notes)
-        VALUES (?, ?, ?)
-    """, (target_date.isoformat(), reason, notes))
-    off_day_id = cursor.lastrowid
+        INSERT INTO off_days (date, reason, notes)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (date) DO UPDATE SET reason = EXCLUDED.reason, notes = EXCLUDED.notes
+        RETURNING id
+    """, (target_date, reason, notes))
+    off_day_id = cursor.fetchone()['id']
     conn.commit()
     conn.close()
     return off_day_id
@@ -437,7 +532,7 @@ def remove_off_day(target_date: date) -> bool:
     """Remove an off day. Returns True if successful."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM off_days WHERE date = ?", (target_date.isoformat(),))
+    cursor.execute("DELETE FROM off_days WHERE date = %s", (target_date,))
     success = cursor.rowcount > 0
     conn.commit()
     conn.close()
@@ -448,7 +543,7 @@ def get_off_day(target_date: date) -> Optional[dict]:
     """Get off day info for a specific date."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM off_days WHERE date = ?", (target_date.isoformat(),))
+    cursor.execute("SELECT * FROM off_days WHERE date = %s", (target_date,))
     row = cursor.fetchone()
     conn.close()
     return dict(row) if row else None
@@ -460,9 +555,9 @@ def get_off_days_in_range(start_date: date, end_date: date) -> List[dict]:
     cursor = conn.cursor()
     cursor.execute("""
         SELECT * FROM off_days
-        WHERE date BETWEEN ? AND ?
+        WHERE date BETWEEN %s AND %s
         ORDER BY date ASC
-    """, (start_date.isoformat(), end_date.isoformat()))
+    """, (start_date, end_date))
     results = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return results
@@ -483,10 +578,12 @@ def log_weight(weight: float, recorded_at: date = None, notes: str = None) -> in
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT OR REPLACE INTO weight_history (weight, recorded_at, notes)
-        VALUES (?, ?, ?)
-    """, (weight, recorded_at.isoformat(), notes))
-    entry_id = cursor.lastrowid
+        INSERT INTO weight_history (weight, recorded_at, notes)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (recorded_at) DO UPDATE SET weight = EXCLUDED.weight, notes = EXCLUDED.notes
+        RETURNING id
+    """, (weight, recorded_at, notes))
+    entry_id = cursor.fetchone()['id']
     conn.commit()
     conn.close()
     return entry_id
@@ -499,7 +596,7 @@ def get_weight_history(limit: int = 30) -> List[dict]:
     cursor.execute("""
         SELECT * FROM weight_history
         ORDER BY recorded_at DESC
-        LIMIT ?
+        LIMIT %s
     """, (limit,))
     results = [dict(row) for row in cursor.fetchall()]
     conn.close()
@@ -553,6 +650,8 @@ def import_data(data: dict, merge: bool = False):
     cursor = conn.cursor()
 
     if not merge:
+        cursor.execute("DELETE FROM meal_ingredients")
+        cursor.execute("DELETE FROM meals")
         cursor.execute("DELETE FROM meal_logs")
         cursor.execute("DELETE FROM foods")
         cursor.execute("DELETE FROM off_days")
@@ -562,56 +661,63 @@ def import_data(data: dict, merge: bool = False):
     for food in data.get('foods', []):
         if merge:
             cursor.execute("""
-                INSERT OR IGNORE INTO foods
-                (id, name, calories, protein, carbs, fats, serving_size, is_favorite)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (food.get('id'), food['name'], food['calories'],
+                INSERT INTO foods
+                (name, calories, protein, carbs, fats, serving_size, is_favorite)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (name) DO NOTHING
+            """, (food['name'], food['calories'],
                   food.get('protein', 0), food.get('carbs', 0), food.get('fats', 0),
                   food.get('serving_size', '1 serving'), food.get('is_favorite', 0)))
         else:
             cursor.execute("""
                 INSERT INTO foods
-                (id, name, calories, protein, carbs, fats, serving_size, is_favorite)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (food.get('id'), food['name'], food['calories'],
+                (name, calories, protein, carbs, fats, serving_size, is_favorite)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (food['name'], food['calories'],
                   food.get('protein', 0), food.get('carbs', 0), food.get('fats', 0),
                   food.get('serving_size', '1 serving'), food.get('is_favorite', 0)))
 
-    # Import meal logs
+    # Import meal logs - need to look up new food IDs by name
     for log in data.get('meal_logs', []):
-        if merge:
-            cursor.execute("""
-                INSERT OR IGNORE INTO meal_logs
-                (id, food_id, portions, meal_type, logged_at, notes)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (log.get('id'), log['food_id'], log['portions'],
-                  log['meal_type'], log['logged_at'], log.get('notes')))
-        else:
-            cursor.execute("""
-                INSERT INTO meal_logs
-                (id, food_id, portions, meal_type, logged_at, notes)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, (log.get('id'), log['food_id'], log['portions'],
-                  log['meal_type'], log['logged_at'], log.get('notes')))
+        # Find the food by looking up in the imported foods
+        food_name = None
+        for food in data.get('foods', []):
+            if food.get('id') == log['food_id']:
+                food_name = food['name']
+                break
+
+        if food_name:
+            cursor.execute("SELECT id FROM foods WHERE name = %s", (food_name,))
+            food_row = cursor.fetchone()
+            if food_row:
+                cursor.execute("""
+                    INSERT INTO meal_logs
+                    (food_id, portions, meal_type, logged_at, notes)
+                    VALUES (%s, %s, %s, %s, %s)
+                """, (food_row['id'], log['portions'],
+                      log['meal_type'], log['logged_at'], log.get('notes')))
 
     # Import settings
     for key, value in data.get('settings', {}).items():
         cursor.execute("""
-            INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)
+            INSERT INTO settings (key, value) VALUES (%s, %s)
+            ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
         """, (key, value))
 
     # Import off days
     for off_day in data.get('off_days', []):
         cursor.execute("""
-            INSERT OR REPLACE INTO off_days (date, reason, notes)
-            VALUES (?, ?, ?)
+            INSERT INTO off_days (date, reason, notes)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (date) DO UPDATE SET reason = EXCLUDED.reason, notes = EXCLUDED.notes
         """, (off_day['date'], off_day['reason'], off_day.get('notes')))
 
     # Import weight history
     for entry in data.get('weight_history', []):
         cursor.execute("""
-            INSERT OR REPLACE INTO weight_history (weight, recorded_at, notes)
-            VALUES (?, ?, ?)
+            INSERT INTO weight_history (weight, recorded_at, notes)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (recorded_at) DO UPDATE SET weight = EXCLUDED.weight, notes = EXCLUDED.notes
         """, (entry['weight'], entry['recorded_at'], entry.get('notes')))
 
     conn.commit()
@@ -646,7 +752,7 @@ def create_multi_meal(name: str, meal_type: str, ingredients: List[dict],
     # Get food details and calculate nutrition for each ingredient
     ingredient_details = []
     for ing in ingredients:
-        cursor.execute("SELECT * FROM foods WHERE id = ?", (ing['food_id'],))
+        cursor.execute("SELECT * FROM foods WHERE id = %s", (ing['food_id'],))
         food = cursor.fetchone()
         if food:
             food = dict(food)
@@ -680,18 +786,19 @@ def create_multi_meal(name: str, meal_type: str, ingredients: List[dict],
     cursor.execute("""
         INSERT INTO meals (name, meal_type, logged_at, total_calories, total_protein,
                           total_carbs, total_fats, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
     """, (name, meal_type, logged_at, total_calories, total_protein,
           total_carbs, total_fats, notes))
 
-    meal_id = cursor.lastrowid
+    meal_id = cursor.fetchone()['id']
 
     # Insert all ingredients
     for ing in ingredient_details:
         cursor.execute("""
             INSERT INTO meal_ingredients (meal_id, food_id, amount_grams,
                                          calories, protein, carbs, fats)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (meal_id, ing['food_id'], ing['amount_grams'],
               ing['calories'], ing['protein'], ing['carbs'], ing['fats']))
 
@@ -705,7 +812,7 @@ def get_meal(meal_id: int) -> Optional[dict]:
     conn = get_connection()
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM meals WHERE id = ?", (meal_id,))
+    cursor.execute("SELECT * FROM meals WHERE id = %s", (meal_id,))
     meal = cursor.fetchone()
 
     if not meal:
@@ -722,7 +829,7 @@ def get_meal(meal_id: int) -> Optional[dict]:
             f.serving_size
         FROM meal_ingredients mi
         JOIN foods f ON mi.food_id = f.id
-        WHERE mi.meal_id = ?
+        WHERE mi.meal_id = %s
     """, (meal_id,))
 
     meal['ingredients'] = [dict(row) for row in cursor.fetchall()]
@@ -736,8 +843,8 @@ def delete_multi_meal(meal_id: int) -> bool:
     cursor = conn.cursor()
 
     # Delete ingredients first (or rely on CASCADE)
-    cursor.execute("DELETE FROM meal_ingredients WHERE meal_id = ?", (meal_id,))
-    cursor.execute("DELETE FROM meals WHERE id = ?", (meal_id,))
+    cursor.execute("DELETE FROM meal_ingredients WHERE meal_id = %s", (meal_id,))
+    cursor.execute("DELETE FROM meals WHERE id = %s", (meal_id,))
 
     success = cursor.rowcount > 0
     conn.commit()
@@ -752,9 +859,9 @@ def get_multi_meals_for_date(target_date: date) -> List[dict]:
 
     cursor.execute("""
         SELECT * FROM meals
-        WHERE DATE(logged_at) = ?
+        WHERE DATE(logged_at) = %s
         ORDER BY logged_at ASC
-    """, (target_date.isoformat(),))
+    """, (target_date,))
 
     meals = []
     for row in cursor.fetchall():
@@ -768,7 +875,7 @@ def get_multi_meals_for_date(target_date: date) -> List[dict]:
                 f.serving_size
             FROM meal_ingredients mi
             JOIN foods f ON mi.food_id = f.id
-            WHERE mi.meal_id = ?
+            WHERE mi.meal_id = %s
         """, (meal['id'],))
 
         meal['ingredients'] = [dict(ing) for ing in cursor.fetchall()]
@@ -799,9 +906,9 @@ def get_multi_meals_for_date_range(start_date: date, end_date: date) -> List[dic
 
     cursor.execute("""
         SELECT * FROM meals
-        WHERE DATE(logged_at) BETWEEN ? AND ?
+        WHERE DATE(logged_at) BETWEEN %s AND %s
         ORDER BY logged_at ASC
-    """, (start_date.isoformat(), end_date.isoformat()))
+    """, (start_date, end_date))
 
     meals = []
     for row in cursor.fetchall():
@@ -813,7 +920,7 @@ def get_multi_meals_for_date_range(start_date: date, end_date: date) -> List[dic
                 f.name as food_name
             FROM meal_ingredients mi
             JOIN foods f ON mi.food_id = f.id
-            WHERE mi.meal_id = ?
+            WHERE mi.meal_id = %s
         """, (meal['id'],))
 
         meal['ingredients'] = [dict(ing) for ing in cursor.fetchall()]
@@ -850,7 +957,7 @@ def import_foods_bulk(foods_data: List[dict], skip_duplicates: bool = True) -> d
         serving_size = food.get('serving_size', '100g')
 
         # Check if food exists
-        cursor.execute("SELECT id FROM foods WHERE name = ?", (name,))
+        cursor.execute("SELECT id FROM foods WHERE name = %s", (name,))
         existing = cursor.fetchone()
 
         if existing:
@@ -860,14 +967,14 @@ def import_foods_bulk(foods_data: List[dict], skip_duplicates: bool = True) -> d
                 # Update existing food
                 cursor.execute("""
                     UPDATE foods
-                    SET calories = ?, protein = ?, carbs = ?, fats = ?, serving_size = ?
-                    WHERE name = ?
+                    SET calories = %s, protein = %s, carbs = %s, fats = %s, serving_size = %s
+                    WHERE name = %s
                 """, (calories, protein, carbs, fats, serving_size, name))
                 updated += 1
         else:
             cursor.execute("""
                 INSERT INTO foods (name, calories, protein, carbs, fats, serving_size)
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s)
             """, (name, calories, protein, carbs, fats, serving_size))
             added += 1
 
