@@ -30,7 +30,12 @@
         <!-- Header -->
         <header class="header">
             <div class="header-content">
-                <h1 class="header-title">Food Tracker</h1>
+                <button class="back-btn hidden" id="backBtn" aria-label="Go back">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 12H5M12 19l-7-7 7-7"/>
+                    </svg>
+                </button>
+                <h1 class="header-title" id="headerTitle">Food Tracker</h1>
                 <button class="icon-btn" id="settingsBtn" aria-label="Settings">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <circle cx="12" cy="12" r="3"></circle>
@@ -144,29 +149,261 @@
                 </div>
             </section>
 
+            <!-- Log Meal View -->
+            <section class="view" id="logmealView">
+                <!-- Step 1: Choose Mode -->
+                <div class="logmeal-step" id="logmealStep1">
+                    <div class="meal-mode-selector">
+                        <button class="mode-btn active" data-mode="quick" id="modeQuickBtn">
+                            <span class="mode-icon">⚡</span>
+                            <span class="mode-name">Quick Add</span>
+                            <span class="mode-desc">Single food item</span>
+                        </button>
+                        <button class="mode-btn" data-mode="multi" id="modeMultiBtn">
+                            <span class="mode-icon">🍽️</span>
+                            <span class="mode-name">Multi-Ingredient</span>
+                            <span class="mode-desc">Build a meal</span>
+                        </button>
+                    </div>
+
+                    <!-- Quick Add Content -->
+                    <div class="meal-mode-content" id="quickAddContent">
+                        <div class="search-bar">
+                            <input type="search" id="mealFoodSearch" placeholder="Search foods..." class="search-input">
+                        </div>
+                        <div class="quick-access">
+                            <button class="quick-btn active" data-source="recent">Recent</button>
+                            <button class="quick-btn" data-source="favorites">Favorites</button>
+                        </div>
+                        <div class="food-results" id="mealFoodResults">
+                            <!-- Food results will be populated here -->
+                        </div>
+                    </div>
+
+                    <!-- Multi-Ingredient Content -->
+                    <div class="meal-mode-content hidden" id="multiIngredientContent">
+                        <!-- Meal Name -->
+                        <div class="form-group">
+                            <label for="multiMealName">Meal Name (optional)</label>
+                            <input type="text" id="multiMealName" placeholder="e.g., Breakfast, Post-workout...">
+                        </div>
+
+                        <!-- Meal Type -->
+                        <div class="form-group">
+                            <label>Meal Type</label>
+                            <div class="meal-type-selector" id="multiMealTypeSelector">
+                                <button class="meal-type-btn" data-type="breakfast">🌅 Breakfast</button>
+                                <button class="meal-type-btn active" data-type="lunch">☀️ Lunch</button>
+                                <button class="meal-type-btn" data-type="dinner">🌙 Dinner</button>
+                                <button class="meal-type-btn" data-type="snack">🍿 Snack</button>
+                            </div>
+                        </div>
+
+                        <!-- Selected Ingredients List -->
+                        <div class="ingredients-section">
+                            <div class="section-header">
+                                <h3>Ingredients</h3>
+                                <button class="btn-text" id="addIngredientBtn">+ Add</button>
+                            </div>
+                            <div class="ingredients-list" id="ingredientsList">
+                                <div class="empty-state" id="noIngredientsMsg">
+                                    <p class="empty-state-text">No ingredients added yet.<br>Tap "+ Add" to search and add foods.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Running Totals -->
+                        <div class="meal-totals" id="mealTotals">
+                            <div class="totals-header">Meal Totals</div>
+                            <div class="totals-grid">
+                                <div class="total-item">
+                                    <span class="total-value" id="totalCalories">0</span>
+                                    <span class="total-label">Calories</span>
+                                </div>
+                                <div class="total-item">
+                                    <span class="total-value" id="totalProtein">0g</span>
+                                    <span class="total-label">Protein</span>
+                                </div>
+                                <div class="total-item">
+                                    <span class="total-value" id="totalCarbs">0g</span>
+                                    <span class="total-label">Carbs</span>
+                                </div>
+                                <div class="total-item">
+                                    <span class="total-value" id="totalFats">0g</span>
+                                    <span class="total-label">Fats</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-primary btn-block" id="confirmMultiMeal" disabled>Log Meal</button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Add Ingredient (search) -->
+                <div class="logmeal-step hidden" id="logmealStep2">
+                    <div class="page-header">
+                        <button class="back-link" id="backToStep1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 12H5M12 19l-7-7 7-7"/>
+                            </svg>
+                            Back to Meal
+                        </button>
+                    </div>
+                    <h2 class="page-title">Add Ingredient</h2>
+                    <div class="search-bar">
+                        <input type="search" id="ingredientSearch" placeholder="Search foods..." class="search-input">
+                    </div>
+                    <div class="food-results" id="ingredientSearchResults">
+                        <!-- Search results will be populated here -->
+                    </div>
+                </div>
+
+                <!-- Step 3: Set Amount -->
+                <div class="logmeal-step hidden" id="logmealStep3">
+                    <div class="page-header">
+                        <button class="back-link" id="backToStep2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 12H5M12 19l-7-7 7-7"/>
+                            </svg>
+                            Back to Search
+                        </button>
+                    </div>
+                    <h2 class="page-title" id="ingredientFoodName">Food Name</h2>
+                    <div class="ingredient-info" id="ingredientFoodInfo">
+                        <!-- Per 100g info will be shown here -->
+                    </div>
+                    <div class="form-group">
+                        <label for="ingredientGrams">Amount (grams)</label>
+                        <div class="amount-control">
+                            <button class="amount-btn" id="decreaseGrams">−</button>
+                            <input type="number" id="ingredientGrams" value="100" min="1" step="10">
+                            <button class="amount-btn" id="increaseGrams">+</button>
+                        </div>
+                    </div>
+                    <div class="quick-amounts">
+                        <button class="quick-amount-btn" data-grams="50">50g</button>
+                        <button class="quick-amount-btn active" data-grams="100">100g</button>
+                        <button class="quick-amount-btn" data-grams="150">150g</button>
+                        <button class="quick-amount-btn" data-grams="200">200g</button>
+                    </div>
+                    <div class="calculated-nutrition" id="ingredientNutrition">
+                        <!-- Calculated values for this amount -->
+                    </div>
+                    <button class="btn btn-primary btn-block" id="confirmAddIngredient">Add Ingredient</button>
+                </div>
+
+                <!-- Step 4: Food Details (Quick Add) -->
+                <div class="logmeal-step hidden" id="logmealStep4">
+                    <div class="page-header">
+                        <button class="back-link" id="backToQuickAdd">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 12H5M12 19l-7-7 7-7"/>
+                            </svg>
+                            Back to Search
+                        </button>
+                    </div>
+                    <h2 class="page-title" id="selectedFoodName">Food Name</h2>
+                    <div class="food-info" id="selectedFoodInfo">
+                        <!-- Food info will be populated here -->
+                    </div>
+                    <div class="form-group">
+                        <label for="portionInput">Portions</label>
+                        <div class="portion-control">
+                            <button class="portion-btn" id="decreasePortion">−</button>
+                            <input type="number" id="portionInput" value="1" min="0.1" step="0.1">
+                            <button class="portion-btn" id="increasePortion">+</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Meal Type</label>
+                        <div class="meal-type-selector" id="mealTypeSelector">
+                            <button class="meal-type-btn" data-type="breakfast">🌅 Breakfast</button>
+                            <button class="meal-type-btn active" data-type="lunch">☀️ Lunch</button>
+                            <button class="meal-type-btn" data-type="dinner">🌙 Dinner</button>
+                            <button class="meal-type-btn" data-type="snack">🍿 Snack</button>
+                        </div>
+                    </div>
+                    <div class="calculated-nutrition" id="calculatedNutrition">
+                        <!-- Calculated values will be shown here -->
+                    </div>
+                    <button class="btn btn-primary btn-block" id="confirmLogMeal">Log Meal</button>
+                </div>
+            </section>
+
             <!-- Foods View -->
             <section class="view" id="foodsView">
-                <div class="search-bar">
-                    <input type="search" id="foodSearch" placeholder="Search foods..." class="search-input">
+                <!-- Foods List View -->
+                <div class="foods-page" id="foodsListPage">
+                    <div class="search-bar">
+                        <input type="search" id="foodSearch" placeholder="Search foods..." class="search-input">
+                    </div>
+
+                    <div class="foods-tabs">
+                        <button class="tab-btn active" data-tab="all">All</button>
+                        <button class="tab-btn" data-tab="favorites">Favorites</button>
+                        <button class="tab-btn" data-tab="recent">Recent</button>
+                    </div>
+
+                    <div class="foods-list" id="foodsList">
+                        <!-- Foods will be populated here -->
+                    </div>
+
+                    <button class="btn btn-primary btn-block add-food-btn" id="addFoodBtn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Add New Food
+                    </button>
                 </div>
 
-                <div class="foods-tabs">
-                    <button class="tab-btn active" data-tab="all">All</button>
-                    <button class="tab-btn" data-tab="favorites">Favorites</button>
-                    <button class="tab-btn" data-tab="recent">Recent</button>
+                <!-- Add/Edit Food Page -->
+                <div class="foods-page hidden" id="addFoodPage">
+                    <div class="page-header">
+                        <button class="back-link" id="backToFoodsList">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M19 12H5M12 19l-7-7 7-7"/>
+                            </svg>
+                            Back to Foods
+                        </button>
+                    </div>
+                    <h2 class="page-title" id="foodFormTitle">Add Food</h2>
+                    <div class="food-form">
+                        <div class="form-group">
+                            <label for="foodName">Food Name</label>
+                            <input type="text" id="foodName" placeholder="e.g., Chicken Breast">
+                        </div>
+                        <div class="form-group">
+                            <label for="foodCalories">Calories</label>
+                            <input type="number" id="foodCalories" placeholder="0" min="0">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="foodProtein">Protein (g)</label>
+                                <input type="number" id="foodProtein" placeholder="0" min="0" step="0.1">
+                            </div>
+                            <div class="form-group">
+                                <label for="foodCarbs">Carbs (g)</label>
+                                <input type="number" id="foodCarbs" placeholder="0" min="0" step="0.1">
+                            </div>
+                            <div class="form-group">
+                                <label for="foodFats">Fats (g)</label>
+                                <input type="number" id="foodFats" placeholder="0" min="0" step="0.1">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="foodServing">Serving Size</label>
+                            <input type="text" id="foodServing" placeholder="e.g., 100g, 1 cup">
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <label>
+                                <input type="checkbox" id="foodFavorite">
+                                <span>Mark as Favorite</span>
+                            </label>
+                        </div>
+                        <button class="btn btn-primary btn-block" id="saveFoodBtn">Save Food</button>
+                    </div>
                 </div>
-
-                <div class="foods-list" id="foodsList">
-                    <!-- Foods will be populated here -->
-                </div>
-
-                <button class="add-food-btn" id="addFoodBtn">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <line x1="5" y1="12" x2="19" y2="12"></line>
-                    </svg>
-                    Add New Food
-                </button>
             </section>
 
             <!-- Settings View -->
@@ -231,7 +468,18 @@
 
                 <div class="settings-section">
                     <h2 class="section-title">Off Days</h2>
-                    <button class="btn btn-secondary" id="markOffDay">Mark Today as Off Day</button>
+                    <p class="section-desc">Mark today as an off day (cheat day, holiday, etc.)</p>
+                    <div class="off-day-inline" id="offDayInline">
+                        <div class="reason-selector" id="reasonSelector">
+                            <button class="reason-btn" data-reason="holiday">🎉 Holiday</button>
+                            <button class="reason-btn" data-reason="weekend">🛋️ Weekend</button>
+                            <button class="reason-btn" data-reason="dinner with friends">🍽️ Dinner</button>
+                            <button class="reason-btn" data-reason="special date">💕 Date</button>
+                            <button class="reason-btn" data-reason="travel">✈️ Travel</button>
+                            <button class="reason-btn" data-reason="party">🎊 Party</button>
+                        </div>
+                        <button class="btn btn-secondary btn-block" id="markOffDay">Mark Today as Off Day</button>
+                    </div>
                     <div class="off-days-list" id="offDaysList">
                         <!-- Off days will be populated here -->
                     </div>
@@ -276,11 +524,12 @@
                 </svg>
                 <span>Analytics</span>
             </button>
-            <button class="nav-item fab" id="quickAddBtn">
-                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <button class="nav-item" data-view="logmeal">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="12" y1="5" x2="12" y2="19"></line>
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                 </svg>
+                <span>Log Meal</span>
             </button>
             <button class="nav-item" data-view="foods">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -300,278 +549,6 @@
                 <span>Settings</span>
             </button>
         </nav>
-
-        <!-- Floating Action Button (Quick Add) -->
-        <button class="floating-fab hidden" id="floatingFab">
-            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-        </button>
-
-        <!-- Modal Overlay -->
-        <div class="modal-overlay" id="modalOverlay"></div>
-
-        <!-- Log Meal Modal -->
-        <div class="modal slide-up" id="logMealModal">
-            <div class="modal-header">
-                <h2>Log Meal</h2>
-                <button class="modal-close" data-close="logMealModal">×</button>
-            </div>
-            <div class="modal-content">
-                <!-- Meal Type Selection -->
-                <div class="meal-mode-selector" id="mealModeSelector">
-                    <button class="mode-btn active" data-mode="quick">
-                        <span class="mode-icon">⚡</span>
-                        <span class="mode-name">Quick Add</span>
-                        <span class="mode-desc">Single food item</span>
-                    </button>
-                    <button class="mode-btn" data-mode="multi">
-                        <span class="mode-icon">🍽️</span>
-                        <span class="mode-name">Multi-Ingredient</span>
-                        <span class="mode-desc">Build a meal</span>
-                    </button>
-                </div>
-
-                <!-- Quick Add Section -->
-                <div class="meal-mode-content" id="quickAddSection">
-                    <div class="search-bar">
-                        <input type="search" id="mealFoodSearch" placeholder="Search foods..." class="search-input">
-                    </div>
-                    <div class="quick-access">
-                        <button class="quick-btn active" data-source="recent">Recent</button>
-                        <button class="quick-btn" data-source="favorites">Favorites</button>
-                    </div>
-                    <div class="food-results" id="mealFoodResults">
-                        <!-- Food results will be populated here -->
-                    </div>
-                </div>
-
-                <!-- Multi-Ingredient Section (hidden by default) -->
-                <div class="meal-mode-content hidden" id="multiIngredientSection">
-                    <button class="btn btn-primary btn-block" id="startMultiMeal">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                        Start Building Meal
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Multi-Ingredient Meal Builder Modal -->
-        <div class="modal slide-up" id="multiMealModal">
-            <div class="modal-header">
-                <h2>Build Meal</h2>
-                <button class="modal-close" data-close="multiMealModal">×</button>
-            </div>
-            <div class="modal-content">
-                <!-- Meal Name -->
-                <div class="form-group">
-                    <label for="multiMealName">Meal Name (optional)</label>
-                    <input type="text" id="multiMealName" placeholder="e.g., Breakfast, Post-workout...">
-                </div>
-
-                <!-- Meal Type -->
-                <div class="form-group">
-                    <label>Meal Type</label>
-                    <div class="meal-type-selector" id="multiMealTypeSelector">
-                        <button class="meal-type-btn" data-type="breakfast">🌅 Breakfast</button>
-                        <button class="meal-type-btn active" data-type="lunch">☀️ Lunch</button>
-                        <button class="meal-type-btn" data-type="dinner">🌙 Dinner</button>
-                        <button class="meal-type-btn" data-type="snack">🍿 Snack</button>
-                    </div>
-                </div>
-
-                <!-- Selected Ingredients List -->
-                <div class="ingredients-section">
-                    <div class="section-header">
-                        <h3>Ingredients</h3>
-                        <button class="btn-text" id="addIngredientBtn">+ Add</button>
-                    </div>
-                    <div class="ingredients-list" id="ingredientsList">
-                        <div class="empty-state" id="noIngredientsMsg">
-                            <p class="empty-state-text">No ingredients added yet.<br>Tap "+ Add" to search and add foods.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Running Totals -->
-                <div class="meal-totals" id="mealTotals">
-                    <div class="totals-header">Meal Totals</div>
-                    <div class="totals-grid">
-                        <div class="total-item">
-                            <span class="total-value" id="totalCalories">0</span>
-                            <span class="total-label">Calories</span>
-                        </div>
-                        <div class="total-item">
-                            <span class="total-value" id="totalProtein">0g</span>
-                            <span class="total-label">Protein</span>
-                        </div>
-                        <div class="total-item">
-                            <span class="total-value" id="totalCarbs">0g</span>
-                            <span class="total-label">Carbs</span>
-                        </div>
-                        <div class="total-item">
-                            <span class="total-value" id="totalFats">0g</span>
-                            <span class="total-label">Fats</span>
-                        </div>
-                    </div>
-                </div>
-
-                <button class="btn btn-primary btn-block" id="confirmMultiMeal" disabled>Log Meal</button>
-            </div>
-        </div>
-
-        <!-- Add Ingredient Modal -->
-        <div class="modal slide-up" id="addIngredientModal">
-            <div class="modal-header">
-                <h2>Add Ingredient</h2>
-                <button class="modal-close" data-close="addIngredientModal">×</button>
-            </div>
-            <div class="modal-content">
-                <div class="search-bar">
-                    <input type="search" id="ingredientSearch" placeholder="Search foods..." class="search-input">
-                </div>
-                <div class="food-results" id="ingredientSearchResults">
-                    <!-- Search results will be populated here -->
-                </div>
-            </div>
-        </div>
-
-        <!-- Ingredient Amount Modal -->
-        <div class="modal slide-up" id="ingredientAmountModal">
-            <div class="modal-header">
-                <h2 id="ingredientFoodName">Food Name</h2>
-                <button class="modal-close" data-close="ingredientAmountModal">×</button>
-            </div>
-            <div class="modal-content">
-                <div class="ingredient-info" id="ingredientFoodInfo">
-                    <!-- Per 100g info will be shown here -->
-                </div>
-                <div class="form-group">
-                    <label for="ingredientGrams">Amount (grams)</label>
-                    <div class="amount-control">
-                        <button class="amount-btn" id="decreaseGrams">−</button>
-                        <input type="number" id="ingredientGrams" value="100" min="1" step="10">
-                        <button class="amount-btn" id="increaseGrams">+</button>
-                    </div>
-                </div>
-                <div class="quick-amounts">
-                    <button class="quick-amount-btn" data-grams="50">50g</button>
-                    <button class="quick-amount-btn active" data-grams="100">100g</button>
-                    <button class="quick-amount-btn" data-grams="150">150g</button>
-                    <button class="quick-amount-btn" data-grams="200">200g</button>
-                </div>
-                <div class="calculated-nutrition" id="ingredientNutrition">
-                    <!-- Calculated values for this amount -->
-                </div>
-                <button class="btn btn-primary btn-block" id="confirmAddIngredient">Add Ingredient</button>
-            </div>
-        </div>
-
-        <!-- Food Details Modal -->
-        <div class="modal slide-up" id="foodDetailsModal">
-            <div class="modal-header">
-                <h2 id="selectedFoodName">Food Name</h2>
-                <button class="modal-close" data-close="foodDetailsModal">×</button>
-            </div>
-            <div class="modal-content">
-                <div class="food-info" id="selectedFoodInfo">
-                    <!-- Food info will be populated here -->
-                </div>
-                <div class="form-group">
-                    <label for="portionInput">Portions</label>
-                    <div class="portion-control">
-                        <button class="portion-btn" id="decreasePortion">−</button>
-                        <input type="number" id="portionInput" value="1" min="0.1" step="0.1">
-                        <button class="portion-btn" id="increasePortion">+</button>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>Meal Type</label>
-                    <div class="meal-type-selector" id="mealTypeSelector">
-                        <button class="meal-type-btn" data-type="breakfast">🌅 Breakfast</button>
-                        <button class="meal-type-btn active" data-type="lunch">☀️ Lunch</button>
-                        <button class="meal-type-btn" data-type="dinner">🌙 Dinner</button>
-                        <button class="meal-type-btn" data-type="snack">🍿 Snack</button>
-                    </div>
-                </div>
-                <div class="calculated-nutrition" id="calculatedNutrition">
-                    <!-- Calculated values will be shown here -->
-                </div>
-                <button class="btn btn-primary btn-block" id="confirmLogMeal">Log Meal</button>
-            </div>
-        </div>
-
-        <!-- Add/Edit Food Modal -->
-        <div class="modal slide-up" id="addFoodModal">
-            <div class="modal-header">
-                <h2 id="foodModalTitle">Add Food</h2>
-                <button class="modal-close" data-close="addFoodModal">×</button>
-            </div>
-            <div class="modal-content">
-                <div class="form-group">
-                    <label for="foodName">Food Name</label>
-                    <input type="text" id="foodName" placeholder="e.g., Chicken Breast">
-                </div>
-                <div class="form-group">
-                    <label for="foodCalories">Calories</label>
-                    <input type="number" id="foodCalories" placeholder="0" min="0">
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="foodProtein">Protein (g)</label>
-                        <input type="number" id="foodProtein" placeholder="0" min="0" step="0.1">
-                    </div>
-                    <div class="form-group">
-                        <label for="foodCarbs">Carbs (g)</label>
-                        <input type="number" id="foodCarbs" placeholder="0" min="0" step="0.1">
-                    </div>
-                    <div class="form-group">
-                        <label for="foodFats">Fats (g)</label>
-                        <input type="number" id="foodFats" placeholder="0" min="0" step="0.1">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="foodServing">Serving Size</label>
-                    <input type="text" id="foodServing" placeholder="e.g., 100g, 1 cup">
-                </div>
-                <div class="form-group checkbox-group">
-                    <label>
-                        <input type="checkbox" id="foodFavorite">
-                        <span>Mark as Favorite</span>
-                    </label>
-                </div>
-                <button class="btn btn-primary btn-block" id="saveFoodBtn">Save Food</button>
-            </div>
-        </div>
-
-        <!-- Off Day Modal -->
-        <div class="modal slide-up" id="offDayModal">
-            <div class="modal-header">
-                <h2>Mark Off Day</h2>
-                <button class="modal-close" data-close="offDayModal">×</button>
-            </div>
-            <div class="modal-content">
-                <p class="modal-desc">Select a reason for this off day:</p>
-                <div class="reason-selector" id="reasonSelector">
-                    <button class="reason-btn" data-reason="holiday">🎉 Holiday</button>
-                    <button class="reason-btn" data-reason="weekend">🛋️ Weekend</button>
-                    <button class="reason-btn" data-reason="dinner with friends">🍽️ Dinner with Friends</button>
-                    <button class="reason-btn" data-reason="special date">💕 Special Date</button>
-                    <button class="reason-btn" data-reason="travel">✈️ Travel</button>
-                    <button class="reason-btn" data-reason="party">🎊 Party</button>
-                    <button class="reason-btn" data-reason="other">📝 Other</button>
-                </div>
-                <div class="form-group hidden" id="otherReasonGroup">
-                    <label for="otherReason">Describe reason</label>
-                    <input type="text" id="otherReason" placeholder="Enter reason...">
-                </div>
-                <button class="btn btn-primary btn-block" id="confirmOffDay">Confirm</button>
-            </div>
-        </div>
 
         <!-- Toast Notification -->
         <div class="toast" id="toast">

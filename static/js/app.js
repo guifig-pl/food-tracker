@@ -17,8 +17,11 @@ const state = {
     chart: null,
     // Multi-ingredient meal state
     mealMode: 'quick',  // 'quick' or 'multi'
-    multiMealIngredients: [],  // Array of {food, amount_grams, calories, protein, carbs, fats}
-    selectedIngredientFood: null
+    multiMealIngredients: [],
+    selectedIngredientFood: null,
+    // Page navigation state
+    logmealStep: 1,
+    foodsSubpage: 'list'  // 'list' or 'add'
 };
 
 // ============================================
@@ -140,90 +143,6 @@ function showToast(message, duration = 3000) {
 }
 
 // ============================================
-// Modal Management
-// ============================================
-
-// Track modal stack for proper z-index management
-const modalStack = [];
-
-function openModal(modalId) {
-    // Close any existing modals first to prevent overlap
-    closeAllModals();
-
-    const modal = $(`#${modalId}`);
-    if (!modal) return;
-
-    // Add to stack and set z-index
-    modalStack.push(modalId);
-    const zIndex = 201 + modalStack.length;
-    modal.style.zIndex = zIndex;
-
-    $('#modalOverlay').classList.add('active');
-    modal.classList.add('active');
-    document.body.style.overflow = 'hidden';
-
-    // Focus the modal for accessibility
-    modal.setAttribute('tabindex', '-1');
-    modal.focus();
-}
-
-function closeModal(modalId) {
-    const modal = $(`#${modalId}`);
-    if (!modal) return;
-
-    modal.classList.remove('active');
-    modal.style.zIndex = '';
-
-    // Remove from stack
-    const index = modalStack.indexOf(modalId);
-    if (index > -1) {
-        modalStack.splice(index, 1);
-    }
-
-    // If no more modals, hide overlay and restore scroll
-    if (modalStack.length === 0) {
-        $('#modalOverlay').classList.remove('active');
-        document.body.style.overflow = '';
-    }
-}
-
-function closeAllModals() {
-    $$('.modal').forEach(modal => {
-        modal.classList.remove('active');
-        modal.style.zIndex = '';
-    });
-    $('#modalOverlay').classList.remove('active');
-    document.body.style.overflow = '';
-    modalStack.length = 0; // Clear the stack
-}
-
-function closeTopModal() {
-    if (modalStack.length > 0) {
-        const topModalId = modalStack[modalStack.length - 1];
-        closeModal(topModalId);
-    }
-}
-
-// ESC key handler for modals
-function initModalKeyHandler() {
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modalStack.length > 0) {
-            e.preventDefault();
-            closeTopModal();
-        }
-    });
-}
-
-// Prevent clicks inside modal from closing it
-function initModalClickHandler() {
-    $$('.modal').forEach(modal => {
-        modal.addEventListener('click', (e) => {
-            e.stopPropagation();
-        });
-    });
-}
-
-// ============================================
 // View Navigation
 // ============================================
 
@@ -237,6 +156,15 @@ function switchView(viewName) {
         item.classList.toggle('active', item.dataset.view === viewName);
     });
 
+    // Reset subpage states when switching views
+    if (viewName === 'logmeal') {
+        showLogmealStep(1);
+        resetMealBuilder();
+        loadMealFoodResults('recent');
+    } else if (viewName === 'foods') {
+        showFoodsSubpage('list');
+    }
+
     // Load view-specific data
     if (viewName === 'dashboard') {
         loadDashboard();
@@ -246,6 +174,51 @@ function switchView(viewName) {
         loadFoods();
     } else if (viewName === 'settings') {
         loadSettings();
+    }
+}
+
+// ============================================
+// Log Meal Page Navigation
+// ============================================
+
+function showLogmealStep(step) {
+    state.logmealStep = step;
+
+    $$('.logmeal-step').forEach(s => s.classList.add('hidden'));
+    $(`#logmealStep${step}`).classList.remove('hidden');
+}
+
+function resetMealBuilder() {
+    state.mealMode = 'quick';
+    state.multiMealIngredients = [];
+    state.selectedIngredientFood = null;
+    state.selectedFood = null;
+
+    // Reset UI
+    $('#modeQuickBtn').classList.add('active');
+    $('#modeMultiBtn').classList.remove('active');
+    $('#quickAddContent').classList.remove('hidden');
+    $('#multiIngredientContent').classList.add('hidden');
+    $('#multiMealName').value = '';
+    $('#mealFoodSearch').value = '';
+
+    updateIngredientsList();
+    updateMealTotals();
+}
+
+// ============================================
+// Foods Page Navigation
+// ============================================
+
+function showFoodsSubpage(subpage) {
+    state.foodsSubpage = subpage;
+
+    if (subpage === 'list') {
+        $('#foodsListPage').classList.remove('hidden');
+        $('#addFoodPage').classList.add('hidden');
+    } else {
+        $('#foodsListPage').classList.add('hidden');
+        $('#addFoodPage').classList.remove('hidden');
     }
 }
 
@@ -318,7 +291,7 @@ function updateMealsList(singleMeals, multiMeals = []) {
         container.innerHTML = `
             <div class="empty-state">
                 <div class="empty-state-icon">🍽️</div>
-                <p class="empty-state-text">No meals logged yet today.<br>Tap + to add your first meal!</p>
+                <p class="empty-state-text">No meals logged yet today.<br>Tap "Log Meal" to add your first meal!</p>
             </div>
         `;
         return;
@@ -455,7 +428,7 @@ function createMultiMealCard(meal) {
             <div class="multi-meal-header">
                 <div class="multi-meal-icon">🍽️</div>
                 <div class="multi-meal-info">
-                    <div class="multi-meal-name">${meal.name}</div>
+                    <div class="multi-meal-name">${meal.name || 'Meal'}</div>
                     <div class="multi-meal-meta">${ingredientCount} ingredients</div>
                 </div>
                 <div class="multi-meal-calories">${calories} cal</div>
@@ -502,33 +475,8 @@ function changeDate(delta) {
 }
 
 // ============================================
-// Log Meal
+// Log Meal - Quick Add
 // ============================================
-
-async function openLogMealModal() {
-    // Reset to quick mode by default
-    state.mealMode = 'quick';
-    updateMealModeUI();
-    openModal('logMealModal');
-    await loadMealFoodResults('recent');
-}
-
-function updateMealModeUI() {
-    $$('.mode-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.mode === state.mealMode);
-    });
-
-    const quickSection = $('#quickAddSection');
-    const multiSection = $('#multiIngredientSection');
-
-    if (state.mealMode === 'quick') {
-        quickSection.classList.remove('hidden');
-        multiSection.classList.add('hidden');
-    } else {
-        quickSection.classList.add('hidden');
-        multiSection.classList.remove('hidden');
-    }
-}
 
 async function loadMealFoodResults(source) {
     const container = $('#mealFoodResults');
@@ -581,8 +529,8 @@ async function loadMealFoodResults(source) {
 function selectFoodForMeal(food) {
     state.selectedFood = food;
 
-    closeModal('logMealModal');
-    openModal('foodDetailsModal');
+    // Go to step 4 (food details for quick add)
+    showLogmealStep(4);
 
     $('#selectedFoodName').textContent = food.name;
     $('#selectedFoodInfo').innerHTML = `
@@ -596,7 +544,7 @@ function selectFoodForMeal(food) {
     updateCalculatedNutrition();
 
     // Reset meal type selection
-    $$('.meal-type-btn').forEach(btn => {
+    $$('#mealTypeSelector .meal-type-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.type === 'lunch');
     });
 }
@@ -636,7 +584,7 @@ async function confirmLogMeal() {
     if (!food) return;
 
     const portions = parseFloat($('#portionInput').value) || 1;
-    const mealType = $('.meal-type-btn.active').dataset.type;
+    const mealType = $('#mealTypeSelector .meal-type-btn.active').dataset.type;
     const dateStr = formatDate(state.currentDate, 'api');
 
     try {
@@ -647,39 +595,33 @@ async function confirmLogMeal() {
             date: dateStr
         });
 
-        closeAllModals();
         showToast(`Logged ${portions}x ${food.name}`);
-        loadDashboard();
+        switchView('dashboard');
     } catch (error) {
         showToast('Failed to log meal');
     }
 }
 
 // ============================================
-// Multi-Ingredient Meal Builder
+// Log Meal - Multi-Ingredient
 // ============================================
 
-function openMultiMealBuilder() {
-    // Reset multi-meal state
-    state.multiMealIngredients = [];
-    state.selectedIngredientFood = null;
-
-    closeModal('logMealModal');
-    openModal('multiMealModal');
-
-    // Reset form
-    $('#multiMealName').value = '';
-    $$('#multiMealTypeSelector .meal-type-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.type === 'lunch');
-    });
-
-    updateIngredientsList();
-    updateMealTotals();
+function updateMealModeUI() {
+    if (state.mealMode === 'quick') {
+        $('#modeQuickBtn').classList.add('active');
+        $('#modeMultiBtn').classList.remove('active');
+        $('#quickAddContent').classList.remove('hidden');
+        $('#multiIngredientContent').classList.add('hidden');
+    } else {
+        $('#modeQuickBtn').classList.remove('active');
+        $('#modeMultiBtn').classList.add('active');
+        $('#quickAddContent').classList.add('hidden');
+        $('#multiIngredientContent').classList.remove('hidden');
+    }
 }
 
 function updateIngredientsList() {
     const container = $('#ingredientsList');
-    const noIngredientsMsg = $('#noIngredientsMsg');
     const confirmBtn = $('#confirmMultiMeal');
 
     if (state.multiMealIngredients.length === 0) {
@@ -734,12 +676,9 @@ function updateMealTotals() {
     $('#totalFats').textContent = `${Math.round(totalFats)}g`;
 }
 
-function openAddIngredientModal() {
-    openModal('addIngredientModal');
+function openAddIngredientSearch() {
+    showLogmealStep(2);
     $('#ingredientSearch').value = '';
-    $('#ingredientSearchResults').innerHTML = '';
-
-    // Load recent foods by default
     loadIngredientSearchResults('');
 }
 
@@ -786,8 +725,7 @@ async function loadIngredientSearchResults(query) {
 function selectIngredientFood(food) {
     state.selectedIngredientFood = food;
 
-    closeModal('addIngredientModal');
-    openModal('ingredientAmountModal');
+    showLogmealStep(3);
 
     $('#ingredientFoodName').textContent = food.name;
     $('#ingredientFoodInfo').innerHTML = `
@@ -874,8 +812,8 @@ function addIngredientToMeal() {
 
     state.multiMealIngredients.push(ingredient);
 
-    closeModal('ingredientAmountModal');
-    openModal('multiMealModal');
+    // Go back to step 1 (multi-ingredient view)
+    showLogmealStep(1);
 
     updateIngredientsList();
     updateMealTotals();
@@ -912,12 +850,8 @@ async function confirmMultiMeal() {
             date: dateStr
         });
 
-        closeAllModals();
         showToast('Meal logged!');
-        loadDashboard();
-
-        // Reset state
-        state.multiMealIngredients = [];
+        switchView('dashboard');
     } catch (error) {
         showToast('Failed to log meal');
         console.error(error);
@@ -1041,9 +975,9 @@ async function searchFoods(query) {
     }
 }
 
-function openAddFoodModal() {
+function openAddFoodPage() {
     state.selectedFood = null;
-    $('#foodModalTitle').textContent = 'Add Food';
+    $('#foodFormTitle').textContent = 'Add Food';
     $('#foodName').value = '';
     $('#foodCalories').value = '';
     $('#foodProtein').value = '';
@@ -1051,12 +985,12 @@ function openAddFoodModal() {
     $('#foodFats').value = '';
     $('#foodServing').value = '';
     $('#foodFavorite').checked = false;
-    openModal('addFoodModal');
+    showFoodsSubpage('add');
 }
 
 function editFood(food) {
     state.selectedFood = food;
-    $('#foodModalTitle').textContent = 'Edit Food';
+    $('#foodFormTitle').textContent = 'Edit Food';
     $('#foodName').value = food.name;
     $('#foodCalories').value = food.calories;
     $('#foodProtein').value = food.protein;
@@ -1064,7 +998,7 @@ function editFood(food) {
     $('#foodFats').value = food.fats;
     $('#foodServing').value = food.serving_size;
     $('#foodFavorite').checked = food.is_favorite;
-    openModal('addFoodModal');
+    showFoodsSubpage('add');
 }
 
 async function saveFood() {
@@ -1094,7 +1028,7 @@ async function saveFood() {
             showToast('Food added');
         }
 
-        closeModal('addFoodModal');
+        showFoodsSubpage('list');
         loadFoods();
     } catch (error) {
         showToast('Failed to save food');
@@ -1161,7 +1095,6 @@ function updateAnalyticsChart(data) {
     }).reverse();
 
     const calorieData = items.map(item => Math.round(item.averages.calories)).reverse();
-    const proteinData = items.map(item => Math.round(item.averages.protein)).reverse();
 
     state.chart = new Chart(ctx, {
         type: 'bar',
@@ -1369,33 +1302,27 @@ async function loadOffDays() {
     }
 }
 
-function openOffDayModal() {
-    openModal('offDayModal');
-    $$('.reason-btn').forEach(btn => btn.classList.remove('active'));
-    $('#otherReasonGroup').classList.add('hidden');
-}
-
-async function confirmOffDay() {
+async function markOffDay() {
     const selectedReason = $('.reason-btn.active');
     if (!selectedReason) {
         showToast('Please select a reason');
         return;
     }
 
-    let reason = selectedReason.dataset.reason;
-    if (reason === 'other') {
-        reason = $('#otherReason').value.trim() || 'other';
-    }
+    const reason = selectedReason.dataset.reason;
+    const dateStr = formatDate(state.currentDate, 'api');
 
     try {
-        const dateStr = formatDate(state.currentDate, 'api');
         await API.post('/off-days', {
             date: dateStr,
             reason: reason
         });
 
-        closeModal('offDayModal');
         showToast('Marked as off day');
+
+        // Clear selection
+        $$('.reason-btn').forEach(btn => btn.classList.remove('active'));
+
         loadDashboard();
         loadOffDays();
     } catch (error) {
@@ -1552,11 +1479,7 @@ function initEventListeners() {
         item.addEventListener('click', () => switchView(item.dataset.view));
     });
 
-    // Quick Add Button
-    $('#quickAddBtn').addEventListener('click', openLogMealModal);
-    $('#floatingFab')?.addEventListener('click', openLogMealModal);
-
-    // Settings button
+    // Settings button in header
     $('#settingsBtn').addEventListener('click', () => switchView('settings'));
 
     // Date navigation
@@ -1567,15 +1490,26 @@ function initEventListeners() {
         loadDashboard();
     });
 
-    // Modal close buttons
-    $$('[data-close]').forEach(btn => {
-        btn.addEventListener('click', () => closeModal(btn.dataset.close));
+    // Off Day Banner remove
+    $('#removeOffDay').addEventListener('click', async () => {
+        const dateStr = formatDate(state.currentDate, 'api');
+        await removeOffDay(dateStr);
     });
 
-    // Modal overlay click
-    $('#modalOverlay').addEventListener('click', closeAllModals);
+    // ========== Log Meal Page ==========
 
-    // Log Meal Modal
+    // Mode selector
+    $('#modeQuickBtn').addEventListener('click', () => {
+        state.mealMode = 'quick';
+        updateMealModeUI();
+    });
+
+    $('#modeMultiBtn').addEventListener('click', () => {
+        state.mealMode = 'multi';
+        updateMealModeUI();
+    });
+
+    // Quick Add search
     $('#mealFoodSearch').addEventListener('input', debounce((e) => {
         const query = e.target.value.trim();
         if (query) {
@@ -1593,44 +1527,7 @@ function initEventListeners() {
         });
     });
 
-    // Food Details Modal
-    $('#decreasePortion').addEventListener('click', () => {
-        const input = $('#portionInput');
-        const value = Math.max(0.1, parseFloat(input.value) - 0.5);
-        input.value = value.toFixed(1);
-        updateCalculatedNutrition();
-    });
-
-    $('#increasePortion').addEventListener('click', () => {
-        const input = $('#portionInput');
-        const value = parseFloat(input.value) + 0.5;
-        input.value = value.toFixed(1);
-        updateCalculatedNutrition();
-    });
-
-    $('#portionInput').addEventListener('input', updateCalculatedNutrition);
-
-    $$('.meal-type-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            $$('.meal-type-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-        });
-    });
-
-    $('#confirmLogMeal').addEventListener('click', confirmLogMeal);
-
-    // Meal Mode Selector
-    $$('.mode-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            state.mealMode = btn.dataset.mode;
-            updateMealModeUI();
-        });
-    });
-
-    // Start Multi-Meal Builder
-    $('#startMultiMeal').addEventListener('click', openMultiMealBuilder);
-
-    // Multi-Meal Type Selector
+    // Multi-meal type selector
     $$('#multiMealTypeSelector .meal-type-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             $$('#multiMealTypeSelector .meal-type-btn').forEach(b => b.classList.remove('active'));
@@ -1638,15 +1535,22 @@ function initEventListeners() {
         });
     });
 
-    // Add Ingredient Button
-    $('#addIngredientBtn').addEventListener('click', openAddIngredientModal);
+    // Add ingredient button
+    $('#addIngredientBtn').addEventListener('click', openAddIngredientSearch);
 
-    // Ingredient Search
+    // Confirm multi-meal
+    $('#confirmMultiMeal').addEventListener('click', confirmMultiMeal);
+
+    // Step 2: Ingredient search
+    $('#backToStep1').addEventListener('click', () => showLogmealStep(1));
+
     $('#ingredientSearch').addEventListener('input', debounce((e) => {
         loadIngredientSearchResults(e.target.value.trim());
     }, 300));
 
-    // Ingredient Amount Controls
+    // Step 3: Set amount
+    $('#backToStep2').addEventListener('click', () => showLogmealStep(2));
+
     $('#decreaseGrams').addEventListener('click', () => {
         const input = $('#ingredientGrams');
         const value = Math.max(10, parseInt(input.value) - 10);
@@ -1668,7 +1572,6 @@ function initEventListeners() {
         updateQuickAmountButtons(parseInt($('#ingredientGrams').value));
     });
 
-    // Quick Amount Buttons
     $$('.quick-amount-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             const grams = parseInt(btn.dataset.grams);
@@ -1678,13 +1581,38 @@ function initEventListeners() {
         });
     });
 
-    // Confirm Add Ingredient
     $('#confirmAddIngredient').addEventListener('click', addIngredientToMeal);
 
-    // Confirm Multi-Meal
-    $('#confirmMultiMeal').addEventListener('click', confirmMultiMeal);
+    // Step 4: Food details (quick add)
+    $('#backToQuickAdd').addEventListener('click', () => showLogmealStep(1));
 
-    // Foods View
+    $('#decreasePortion').addEventListener('click', () => {
+        const input = $('#portionInput');
+        const value = Math.max(0.1, parseFloat(input.value) - 0.5);
+        input.value = value.toFixed(1);
+        updateCalculatedNutrition();
+    });
+
+    $('#increasePortion').addEventListener('click', () => {
+        const input = $('#portionInput');
+        const value = parseFloat(input.value) + 0.5;
+        input.value = value.toFixed(1);
+        updateCalculatedNutrition();
+    });
+
+    $('#portionInput').addEventListener('input', updateCalculatedNutrition);
+
+    $$('#mealTypeSelector .meal-type-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            $$('#mealTypeSelector .meal-type-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+    });
+
+    $('#confirmLogMeal').addEventListener('click', confirmLogMeal);
+
+    // ========== Foods Page ==========
+
     $('#foodSearch').addEventListener('input', debounce((e) => {
         searchFoods(e.target.value.trim());
     }, 300));
@@ -1698,10 +1626,15 @@ function initEventListeners() {
         });
     });
 
-    $('#addFoodBtn').addEventListener('click', openAddFoodModal);
+    $('#addFoodBtn').addEventListener('click', openAddFoodPage);
+    $('#backToFoodsList').addEventListener('click', () => {
+        showFoodsSubpage('list');
+        loadFoods();
+    });
     $('#saveFoodBtn').addEventListener('click', saveFood);
 
-    // Analytics tabs
+    // ========== Analytics ==========
+
     $$('.analytics-tabs .tab-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             $$('.analytics-tabs .tab-btn').forEach(b => b.classList.remove('active'));
@@ -1711,35 +1644,29 @@ function initEventListeners() {
         });
     });
 
-    // Settings
+    // ========== Settings ==========
+
     $$('.goal-btn').forEach(btn => {
         btn.addEventListener('click', () => saveGoal(btn.dataset.goal));
     });
 
     $('#saveTargets').addEventListener('click', saveTargets);
     $('#logWeight').addEventListener('click', logWeight);
-    $('#markOffDay').addEventListener('click', openOffDayModal);
-    $('#darkModeToggle').addEventListener('change', toggleDarkMode);
-    $('#exportData').addEventListener('click', exportData);
-    $('#importData').addEventListener('click', triggerImport);
-    $('#importFile').addEventListener('change', importData);
 
-    // Off Day Modal
+    // Off day reason selector
     $$('.reason-btn').forEach(btn => {
         btn.addEventListener('click', () => {
             $$('.reason-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
-            $('#otherReasonGroup').classList.toggle('hidden', btn.dataset.reason !== 'other');
         });
     });
 
-    $('#confirmOffDay').addEventListener('click', confirmOffDay);
+    $('#markOffDay').addEventListener('click', markOffDay);
 
-    // Off Day Banner remove
-    $('#removeOffDay').addEventListener('click', async () => {
-        const dateStr = formatDate(state.currentDate, 'api');
-        await removeOffDay(dateStr);
-    });
+    $('#darkModeToggle').addEventListener('change', toggleDarkMode);
+    $('#exportData').addEventListener('click', exportData);
+    $('#importData').addEventListener('click', triggerImport);
+    $('#importFile').addEventListener('change', importData);
 }
 
 // ============================================
@@ -1749,8 +1676,6 @@ function initEventListeners() {
 document.addEventListener('DOMContentLoaded', () => {
     initDarkMode();
     initEventListeners();
-    initModalKeyHandler();
-    initModalClickHandler();
     initPullToRefresh();
     registerServiceWorker();
     loadDashboard();

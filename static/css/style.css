@@ -1132,51 +1132,99 @@ input:checked + .slider::before {
     height: 24px;
 }
 
-.nav-item.fab {
-    position: relative;
-    top: -20px;
-    width: 56px;
-    height: 56px;
-    min-width: 56px;
-    min-height: 56px;
-    padding: 0;
-    background: var(--primary);
-    color: white;
-    border-radius: 50%;
-    box-shadow: var(--shadow-lg);
-}
-
-.nav-item.fab svg {
-    width: 28px;
-    height: 28px;
-}
-
 /* ============================================
-   Floating FAB (alternate)
+   Page Navigation Elements
    ============================================ */
 
-.floating-fab {
-    position: fixed;
-    bottom: calc(90px + var(--safe-bottom));
-    right: var(--spacing-md);
-    width: 56px;
-    height: 56px;
+.back-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--primary);
-    color: white;
+    width: 40px;
+    height: 40px;
+    background: transparent;
     border: none;
-    border-radius: 50%;
-    box-shadow: var(--shadow-lg);
+    color: var(--text-primary);
     cursor: pointer;
-    z-index: 50;
-    transition: transform var(--transition-fast), background var(--transition-fast);
+    border-radius: var(--radius-sm);
+    transition: background var(--transition-fast);
 }
 
-.floating-fab:hover {
-    transform: scale(1.1);
-    background: var(--primary-dark);
+.back-btn:hover {
+    background: var(--bg-tertiary);
+}
+
+.back-btn.hidden {
+    display: none;
+}
+
+.back-link {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    background: none;
+    border: none;
+    color: var(--primary);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: var(--spacing-sm) 0;
+    margin-bottom: var(--spacing-md);
+}
+
+.back-link:hover {
+    text-decoration: underline;
+}
+
+.page-header {
+    margin-bottom: var(--spacing-sm);
+}
+
+.page-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: var(--spacing-lg);
+    color: var(--text-primary);
+}
+
+/* Log Meal Steps */
+.logmeal-step {
+    animation: fadeIn var(--transition-normal);
+}
+
+.logmeal-step.hidden {
+    display: none;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Foods Pages */
+.foods-page {
+    animation: fadeIn var(--transition-normal);
+}
+
+.foods-page.hidden {
+    display: none;
+}
+
+.food-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+}
+
+/* Off Day Inline Selector */
+.off-day-inline {
+    margin-top: var(--spacing-md);
+}
+
+.section-desc {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    margin-bottom: var(--spacing-sm);
 }
 
 /* ============================================
@@ -1893,12 +1941,8 @@ input:checked + .slider::before {
    ============================================ */
 
 @media (min-width: 1024px) {
-    .bottom-nav {
-        display: none;
-    }
-
     .main-content {
-        padding-bottom: var(--spacing-xl);
+        padding-bottom: calc(80px + var(--safe-bottom));
     }
 
     .header-content {
@@ -1909,13 +1953,14 @@ input:checked + .slider::before {
         max-width: 1200px;
     }
 
-    /* Show floating FAB on desktop since bottom nav is hidden */
-    .floating-fab {
-        bottom: var(--spacing-xl);
+    /* Bottom nav stays visible on desktop */
+    .bottom-nav {
+        justify-content: center;
+        gap: var(--spacing-xl);
     }
 
-    .floating-fab.hidden {
-        display: flex;
+    .nav-item {
+        min-width: 80px;
     }
 }
 
