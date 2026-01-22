@@ -381,6 +381,109 @@ def get_weekly_progress():
     return json_response({'weekly': weekly})
 
 
+@app.route('/api/debug/weekly', methods=['GET'])
+def debug_weekly():
+    """Debug endpoint to see weekly calculation details."""
+    from datetime import date as date_type
+    week_start = logic.get_week_start()
+    week_end = week_start + timedelta(days=6)
+
+    # Get raw data
+    single_meals = db.get_meals_for_date_range(week_start, week_end)
+    multi_meals = db.get_multi_meals_for_date_range(week_start, week_end)
+    off_days = db.get_off_days_in_range(week_start, week_end)
+
+    # Group by date for debugging
+    from collections import defaultdict
+    daily_single = defaultdict(list)
+    daily_multi = defaultdict(list)
+
+    for meal in single_meals:
+        logged_at = meal['logged_at']
+        if isinstance(logged_at, datetime):
+            d = logged_at.date().isoformat()
+        elif isinstance(logged_at, date_type):
+            d = logged_at.isoformat()
+        else:
+            d = str(logged_at)[:10]
+        daily_single[d].append({
+            'name': meal.get('name', 'unknown'),
+            'calories': meal['calories'],
+            'portions': meal['portions'],
+            'total_cal': meal['calories'] * meal['portions']
+        })
+
+    for meal in multi_meals:
+        logged_at = meal['logged_at']
+        if isinstance(logged_at, datetime):
+            d = logged_at.date().isoformat()
+        elif isinstance(logged_at, date_type):
+            d = logged_at.isoformat()
+        else:
+            d = str(logged_at)[:10]
+        daily_multi[d].append({
+            'name': meal.get('name', 'unnamed meal'),
+            'total_calories': meal['total_calories'],
+            'ingredients': len(meal.get('ingredients', []))
+        })
+
+    # Calculate what the totals should be
+    day_totals = {}
+    all_dates = set(daily_single.keys()) | set(daily_multi.keys())
+    for d in all_dates:
+        single_cal = sum(m['total_cal'] for m in daily_single.get(d, []))
+        multi_cal = sum(m['total_calories'] for m in daily_multi.get(d, []))
+        day_totals[d] = {
+            'single_meals_cal': single_cal,
+            'multi_meals_cal': multi_cal,
+            'total': single_cal + multi_cal
+        }
+
+    # Get off day dates
+    off_day_dates = []
+    for od in off_days:
+        od_date = od['date']
+        if isinstance(od_date, date_type):
+            off_day_dates.append(od_date.isoformat())
+        else:
+            off_day_dates.append(str(od_date)[:10])
+
+    # Calculate expected average
+    tracked_days = 0
+    total_cal = 0
+    for d, totals in day_totals.items():
+        if d not in off_day_dates:
+            tracked_days += 1
+            total_cal += totals['total']
+
+    expected_avg = total_cal / tracked_days if tracked_days > 0 else 0
+
+    # Also get the actual weekly calculation result for comparison
+    actual_weekly = logic.calculate_weekly_averages(week_start)
+
+    return json_response({
+        'week_start': week_start.isoformat(),
+        'week_end': week_end.isoformat(),
+        'single_meals_count': len(single_meals),
+        'multi_meals_count': len(multi_meals),
+        'off_days': off_day_dates,
+        'daily_single_meals': dict(daily_single),
+        'daily_multi_meals': dict(daily_multi),
+        'day_totals': day_totals,
+        'calculation': {
+            'tracked_days': tracked_days,
+            'total_calories': total_cal,
+            'expected_average': expected_avg
+        },
+        'actual_weekly_result': {
+            'tracked_days': actual_weekly['tracked_days'],
+            'total_calories': actual_weekly['totals']['calories'],
+            'average_calories': actual_weekly['averages']['calories'],
+            'debug': actual_weekly.get('debug', {})
+        }
+    })
+
+
 @app.route('/api/progress/monthly', methods=['GET'])
 def get_monthly_progress():
     """Get monthly progress and averages."""

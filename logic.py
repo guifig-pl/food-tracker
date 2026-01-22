@@ -10,7 +10,8 @@ from collections import defaultdict
 from database import (
     get_meals_for_date, get_meals_for_date_range,
     get_off_days_in_range, is_off_day, get_setting, set_setting,
-    get_all_settings, get_weight_history, get_latest_weight
+    get_all_settings, get_weight_history, get_latest_weight,
+    get_multi_meals_for_date_range
 )
 
 
@@ -182,46 +183,123 @@ def get_month_start(target_date: date = None) -> date:
 
 
 def calculate_weekly_averages(week_start: date = None) -> dict:
-    """Calculate average nutrition for a week."""
+    """Calculate average nutrition for a week.
+
+    Only counts days that have at least one meal logged.
+    Excludes off days from the average calculation.
+    """
     if week_start is None:
         week_start = get_week_start()
 
     week_end = week_start + timedelta(days=6)
     meals = get_meals_for_date_range(week_start, week_end)
+    multi_meals = get_multi_meals_for_date_range(week_start, week_end)
     off_days = get_off_days_in_range(week_start, week_end)
+
+    # Debug: log raw data
+    debug_raw_meals = []
+    debug_raw_multi = []
+
+    # Helper to get date string from logged_at field (handles datetime, date, and string)
+    def get_date_str(logged_at):
+        if isinstance(logged_at, datetime):
+            return logged_at.date().isoformat()
+        elif isinstance(logged_at, date):
+            return logged_at.isoformat()
+        elif logged_at is None:
+            return None
+        else:
+            # Handle string format - could be "2026-01-19" or "2026-01-19 12:30:00" or ISO format
+            logged_str = str(logged_at)
+            # Extract just the date part (first 10 characters)
+            return logged_str[:10]
 
     # Group meals by date
     daily_totals = defaultdict(lambda: {
         'calories': 0.0, 'protein': 0.0, 'carbs': 0.0, 'fats': 0.0
     })
 
+    # Add single-food meals
     for meal in meals:
-        meal_date = datetime.fromisoformat(meal['logged_at']).date().isoformat()
+        meal_date = get_date_str(meal['logged_at'])
+        if meal_date is None:
+            continue
         portions = meal['portions']
-        daily_totals[meal_date]['calories'] += meal['calories'] * portions
+        cal_contribution = meal['calories'] * portions
+        daily_totals[meal_date]['calories'] += cal_contribution
         daily_totals[meal_date]['protein'] += meal['protein'] * portions
         daily_totals[meal_date]['carbs'] += meal['carbs'] * portions
         daily_totals[meal_date]['fats'] += meal['fats'] * portions
+        debug_raw_meals.append({
+            'date': meal_date,
+            'name': meal.get('name', '?'),
+            'raw_logged_at': str(meal['logged_at']),
+            'logged_at_type': type(meal['logged_at']).__name__,
+            'calories': meal['calories'],
+            'portions': portions,
+            'contribution': cal_contribution
+        })
 
-    off_day_dates = {od['date'] for od in off_days}
+    # Add multi-ingredient meals
+    for meal in multi_meals:
+        meal_date = get_date_str(meal['logged_at'])
+        if meal_date is None:
+            continue
+        daily_totals[meal_date]['calories'] += meal['total_calories']
+        daily_totals[meal_date]['protein'] += meal['total_protein']
+        daily_totals[meal_date]['carbs'] += meal['total_carbs']
+        daily_totals[meal_date]['fats'] += meal['total_fats']
+        debug_raw_multi.append({
+            'date': meal_date,
+            'name': meal.get('name', '?'),
+            'raw_logged_at': str(meal['logged_at']),
+            'logged_at_type': type(meal['logged_at']).__name__,
+            'total_calories': meal['total_calories']
+        })
+
+    # Convert off_day dates to strings for comparison
+    off_day_dates = set()
+    debug_off_day_raw = []
+    for od in off_days:
+        od_date = od['date']
+        if isinstance(od_date, date):
+            date_str = od_date.isoformat()
+        else:
+            # Handle string - take first 10 chars for YYYY-MM-DD
+            date_str = str(od_date)[:10]
+        off_day_dates.add(date_str)
+        debug_off_day_raw.append({
+            'raw': str(od_date),
+            'type': type(od_date).__name__,
+            'normalized': date_str
+        })
+
+    # Only count days that have actual meal data and are not off days
     tracked_days = 0
     total_calories = 0.0
     total_protein = 0.0
     total_carbs = 0.0
     total_fats = 0.0
 
-    current = week_start
-    while current <= week_end:
-        date_str = current.isoformat()
-        if date_str not in off_day_dates:
-            if date_str in daily_totals or current <= date.today():
-                tracked_days += 1
-                if date_str in daily_totals:
-                    total_calories += daily_totals[date_str]['calories']
-                    total_protein += daily_totals[date_str]['protein']
-                    total_carbs += daily_totals[date_str]['carbs']
-                    total_fats += daily_totals[date_str]['fats']
-        current += timedelta(days=1)
+    for date_str, totals in daily_totals.items():
+        # Skip off days
+        if date_str in off_day_dates:
+            continue
+        # Only count days with actual data
+        tracked_days += 1
+        total_calories += totals['calories']
+        total_protein += totals['protein']
+        total_carbs += totals['carbs']
+        total_fats += totals['fats']
+
+    # Debug: show which days are being counted
+    days_counted = []
+    days_excluded = []
+    for date_str, totals in daily_totals.items():
+        if date_str in off_day_dates:
+            days_excluded.append({'date': date_str, 'reason': 'off_day', 'calories': totals['calories']})
+        else:
+            days_counted.append({'date': date_str, 'calories': totals['calories']})
 
     return {
         'week_start': week_start,
@@ -242,11 +320,31 @@ def calculate_weekly_averages(week_start: date = None) -> dict:
             'fats': total_fats / tracked_days if tracked_days > 0 else 0,
         },
         'daily_breakdown': dict(daily_totals),
+        'debug': {
+            'days_counted': days_counted,
+            'days_excluded': days_excluded,
+            'off_day_dates_set': list(off_day_dates),
+            'off_day_raw': debug_off_day_raw,
+            'single_meals_count': len(meals),
+            'multi_meals_count': len(multi_meals),
+            'raw_single_meals': debug_raw_meals,
+            'raw_multi_meals': debug_raw_multi,
+            'calculation_check': {
+                'total_calories': total_calories,
+                'tracked_days': tracked_days,
+                'expected_average': total_calories / tracked_days if tracked_days > 0 else 0,
+                'all_daily_totals_keys': list(daily_totals.keys()),
+            }
+        }
     }
 
 
 def calculate_monthly_averages(month_start: date = None) -> dict:
-    """Calculate average nutrition for a month."""
+    """Calculate average nutrition for a month.
+
+    Only counts days that have at least one meal logged.
+    Excludes off days from the average calculation.
+    """
     if month_start is None:
         month_start = get_month_start()
 
@@ -258,39 +356,75 @@ def calculate_monthly_averages(month_start: date = None) -> dict:
     month_end = next_month - timedelta(days=1)
 
     meals = get_meals_for_date_range(month_start, month_end)
+    multi_meals = get_multi_meals_for_date_range(month_start, month_end)
     off_days = get_off_days_in_range(month_start, month_end)
+
+    # Helper to get date string from logged_at field (handles datetime, date, and string)
+    def get_date_str(logged_at):
+        if isinstance(logged_at, datetime):
+            return logged_at.date().isoformat()
+        elif isinstance(logged_at, date):
+            return logged_at.isoformat()
+        elif logged_at is None:
+            return None
+        else:
+            # Handle string format - extract just the date part
+            return str(logged_at)[:10]
 
     # Group meals by date
     daily_totals = defaultdict(lambda: {
         'calories': 0.0, 'protein': 0.0, 'carbs': 0.0, 'fats': 0.0
     })
 
+    # Add single-food meals
     for meal in meals:
-        meal_date = datetime.fromisoformat(meal['logged_at']).date().isoformat()
+        meal_date = get_date_str(meal['logged_at'])
+        if meal_date is None:
+            continue
         portions = meal['portions']
         daily_totals[meal_date]['calories'] += meal['calories'] * portions
         daily_totals[meal_date]['protein'] += meal['protein'] * portions
         daily_totals[meal_date]['carbs'] += meal['carbs'] * portions
         daily_totals[meal_date]['fats'] += meal['fats'] * portions
 
-    off_day_dates = {od['date'] for od in off_days}
+    # Add multi-ingredient meals
+    for meal in multi_meals:
+        meal_date = get_date_str(meal['logged_at'])
+        if meal_date is None:
+            continue
+        daily_totals[meal_date]['calories'] += meal['total_calories']
+        daily_totals[meal_date]['protein'] += meal['total_protein']
+        daily_totals[meal_date]['carbs'] += meal['total_carbs']
+        daily_totals[meal_date]['fats'] += meal['total_fats']
+
+    # Convert off_day dates to strings for comparison
+    off_day_dates = set()
+    for od in off_days:
+        od_date = od['date']
+        if isinstance(od_date, date):
+            date_str = od_date.isoformat()
+        else:
+            # Handle string - take first 10 chars for YYYY-MM-DD
+            date_str = str(od_date)[:10]
+        off_day_dates.add(date_str)
+
+    # Only count days that have actual meal data and are not off days
     tracked_days = 0
     total_calories = 0.0
     total_protein = 0.0
     total_carbs = 0.0
     total_fats = 0.0
 
-    current = month_start
-    while current <= min(month_end, date.today()):
-        date_str = current.isoformat()
-        if date_str not in off_day_dates:
-            tracked_days += 1
-            if date_str in daily_totals:
-                total_calories += daily_totals[date_str]['calories']
-                total_protein += daily_totals[date_str]['protein']
-                total_carbs += daily_totals[date_str]['carbs']
-                total_fats += daily_totals[date_str]['fats']
-        current += timedelta(days=1)
+    for date_str, totals in daily_totals.items():
+        # Skip off days
+        if date_str in off_day_dates:
+            continue
+        # Only count days with actual data
+        tracked_days += 1
+        total_calories += totals['calories']
+        total_protein += totals['protein']
+        total_carbs += totals['carbs']
+        total_fats += totals['fats']
 
     return {
         'month_start': month_start,
